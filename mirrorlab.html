@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mirrorlab — facial harmony analysis</title>
+<meta name="description" content="On-device AI facial landmark analysis with a personalized PSL-style rating. Your photo never leaves your browser.">
+<style>
+:root{--bg:#0b0b10;--panel:#14141c;--line:#262633;--text:#ececf3;--mute:#9a9ab0;--accent:#8b7bff;--accent2:#35e0c0;--warn:#ffb454}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.55 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.nav{display:flex;justify-content:space-between;align-items:center;padding:18px 5vw;position:sticky;top:0;background:#0b0b10cc;backdrop-filter:blur(10px);border-bottom:1px solid var(--line);z-index:5}
+.logo{font-weight:800;font-size:1.3rem;letter-spacing:-.5px}.logo span{color:var(--accent)}
+.nav a{color:var(--mute);text-decoration:none;margin-left:22px;font-size:.95rem}.nav a:hover{color:var(--text)}
+.hero{text-align:center;padding:12vh 5vw 8vh;background:radial-gradient(60% 50% at 50% 0,#8b7bff22,transparent)}
+.eyebrow{color:var(--accent2);text-transform:uppercase;letter-spacing:.15em;font-size:.8rem;font-weight:700}
+h1{font-size:clamp(2.1rem,6vw,4rem);line-height:1.05;margin:.3em 0;letter-spacing:-1.5px}
+.sub{max-width:620px;margin:1em auto 1.6em;color:var(--mute);font-size:1.1rem}
+.fine{color:var(--mute);font-size:.85rem}
+.btn{display:inline-block;background:var(--accent);color:#fff;border:0;border-radius:12px;padding:12px 22px;font-size:1rem;font-weight:600;cursor:pointer;text-decoration:none;transition:.15s}
+.btn:hover{filter:brightness(1.1)}.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.secondary{background:var(--panel);border:1px solid var(--line);color:var(--text)}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--mute)}
+.panel{max-width:1100px;margin:0 auto;padding:6vh 5vw}
+h2{font-size:1.8rem;letter-spacing:-.5px;margin:0 0 1em}
+.grid{display:grid;grid-template-columns:minmax(280px,420px) 1fr;gap:32px;align-items:start}
+@media(max-width:800px){.grid{grid-template-columns:1fr}}
+.canvas-wrap{position:relative;background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow:hidden;aspect-ratio:4/5}
+canvas,video{width:100%;height:100%;object-fit:cover;display:block}
+video{position:absolute;inset:0;transform:scaleX(-1)}
+.placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--mute);padding:20px;pointer-events:none}
+.actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px}
+.status{min-height:1.4em;color:var(--mute);font-size:.9rem}
+.score-card{display:flex;gap:22px;align-items:center;background:linear-gradient(135deg,#8b7bff25,#35e0c01a);border:1px solid var(--line);border-radius:18px;padding:22px}
+.psl{font-size:4.2rem;font-weight:800;line-height:1;letter-spacing:-3px}
+.tier{font-size:1.4rem;font-weight:700}.pct{color:var(--mute)}
+.warn{background:#ffb45418;border:1px solid #ffb45455;color:var(--warn);padding:10px 14px;border-radius:12px;margin:14px 0;font-size:.9rem}
+.metric{margin:16px 0}.metric .row{display:flex;justify-content:space-between;font-weight:600}
+.metric .row span:last-child{color:var(--mute);font-weight:400;font-size:.9rem}
+.bar{height:8px;background:var(--line);border-radius:99px;margin:6px 0;overflow:hidden}
+.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:99px;transition:width .8s}
+.metric p{margin:0;color:var(--mute);font-size:.85rem}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px}.card p{color:var(--mute);margin:.4em 0 0}
+.disclaimer{margin-top:22px;padding:18px;border:1px solid var(--line);border-radius:14px;color:var(--mute);font-size:.92rem;background:var(--panel)}
+.history .item{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border:1px solid var(--line);border-radius:12px;margin-bottom:8px;background:var(--panel);cursor:pointer}
+.history .item b{font-size:1.2rem}
+footer{text-align:center;color:var(--mute);padding:40px;border-top:1px solid var(--line);font-size:.85rem}
+
+/* ---- animation + new sections ---- */
+.hero{position:relative;overflow:hidden}
+.hero>*{position:relative;z-index:1}
+.orb{position:absolute;border-radius:50%;filter:blur(70px);opacity:.5;z-index:0!important;animation:drift 14s ease-in-out infinite}
+.o1{width:360px;height:360px;background:#8b7bff;left:-90px;top:-60px}
+.o2{width:300px;height:300px;background:#35e0c0;right:-70px;top:140px;animation-delay:-6s;opacity:.35}
+@keyframes drift{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(50px,40px) scale(1.15)}}
+h1{background:linear-gradient(90deg,#fff,#c9c1ff,#7ff0da,#fff);background-size:250% 100%;-webkit-background-clip:text;background-clip:text;color:transparent;animation:shine 7s linear infinite}
+@keyframes shine{to{background-position:-250% 0}}
+.eyebrow,h1,.sub,.hero .btn,.hero .fine{animation-fill-mode:both}
+.eyebrow{animation:rise .8s .05s both}.sub{animation:rise .8s .3s both}.hero .btn{animation:rise .8s .45s both,glow 2.8s 1.4s infinite}.hero .fine{animation:rise .8s .6s both}
+h1{animation:rise .8s .15s both,shine 7s 1s linear infinite}
+@keyframes rise{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 #8b7bff66}50%{box-shadow:0 0 0 14px #8b7bff00}}
+.hero-visual{position:relative;width:min(260px,60vw);margin:46px auto 10px;animation:rise 1s .7s both}
+.mesh{width:100%;display:block;overflow:visible;filter:drop-shadow(0 0 18px #8b7bff55)}
+.mesh .ln{fill:none;stroke:#8b7bffaa;stroke-width:1.2;stroke-dasharray:420;stroke-dashoffset:420;animation:draw 2.6s 1s ease forwards}
+.mesh .ln2{fill:none;stroke:#35e0c066;stroke-width:.8}
+.mesh .dot{fill:#35e0c0;animation:pulse 2.2s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+@keyframes draw{to{stroke-dashoffset:0}}
+@keyframes pulse{0%,100%{opacity:.4;transform:scale(.7)}50%{opacity:1;transform:scale(1.5)}}
+.scanline{position:absolute;left:-8%;right:-8%;height:3px;border-radius:3px;background:linear-gradient(90deg,transparent,#35e0c0,transparent);box-shadow:0 0 18px 4px #35e0c088;animation:scanv 3.2s ease-in-out infinite;top:0}
+@keyframes scanv{0%{top:2%;opacity:0}12%{opacity:1}88%{opacity:1}100%{top:98%;opacity:0}}
+.chip{position:absolute;background:#14141ccc;border:1px solid var(--line);border-radius:99px;padding:5px 12px;font-size:.78rem;color:var(--mute);white-space:nowrap;backdrop-filter:blur(6px);animation:floaty 5s ease-in-out infinite}
+.chip b{color:var(--accent2);font-weight:600}
+.c1{left:-70px;top:12%}.c2{right:-80px;top:34%;animation-delay:-1.5s}.c3{left:-80px;top:62%;animation-delay:-3s}.c4{right:-70px;top:84%;animation-delay:-4s}
+@media(max-width:560px){.c1,.c3{left:-30px}.c2,.c4{right:-30px}.chip{font-size:.7rem}}
+@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.stats{display:flex;justify-content:center;gap:clamp(18px,5vw,56px);margin-top:34px;flex-wrap:wrap;animation:rise 1s .9s both}
+.stat b{display:block;font-size:2rem;font-weight:800;letter-spacing:-1px;color:#fff}.stat span{color:var(--mute);font-size:.82rem}
+.reveal{opacity:0;transform:translateY(34px);transition:opacity .8s ease,transform .8s ease}
+.reveal.in{opacity:1;transform:none}
+.cards .card{transition:transform .25s,border-color .25s,box-shadow .25s}
+.cards .card:hover{transform:translateY(-6px);border-color:var(--accent);box-shadow:0 12px 30px #8b7bff22}
+.cards .card .ic{font-size:1.7rem;display:block;margin-bottom:6px}
+.btn{transition:transform .15s,filter .15s}.btn:hover{transform:translateY(-2px)}.btn:active{transform:scale(.97)}
+.scan{position:absolute;left:0;right:0;height:4px;z-index:3;background:linear-gradient(90deg,transparent,#35e0c0,transparent);box-shadow:0 0 24px 8px #35e0c088;animation:scanv 1.4s linear infinite}
+.scan[hidden]{display:none}
+.placeholder{animation:breathe 3s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:.55}50%{opacity:1}}
+.pop{animation:popin .6s cubic-bezier(.2,1.2,.3,1) both}
+@keyframes popin{from{opacity:0;transform:scale(.94) translateY(14px)}to{opacity:1;transform:none}}
+.ring{position:relative;width:128px;height:128px;flex:none}
+.ring svg{width:100%;height:100%}
+.rbg{fill:none;stroke:#ffffff14;stroke-width:9}
+.rfg{fill:none;stroke:url(#rg);stroke-width:9;stroke-linecap:round;stroke-dasharray:327;stroke-dashoffset:327;transition:stroke-dashoffset 1.4s cubic-bezier(.2,.8,.2,1)}
+.rnum{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
+.rnum b{font-size:2.4rem;font-weight:800;letter-spacing:-1.5px}.rnum small{color:var(--mute);font-size:.8rem;margin-top:3px}
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0}
+@media(max-width:560px){.info-grid{grid-template-columns:1fr}}
+.info{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px;animation:rise .7s .5s both}
+.info+.info{animation-delay:.65s}
+.info small{color:var(--accent2);text-transform:uppercase;letter-spacing:.12em;font-size:.7rem;font-weight:700}
+.info b{display:block;font-size:1.4rem;margin:2px 0}.info p{margin:0;color:var(--mute);font-size:.82rem}
+.metric{animation:rise .6s both}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}.reveal{opacity:1;transform:none}.mesh .ln{stroke-dashoffset:0}}
+
+</style>
+</head>
+<body>
+<header class="nav">
+  <div class="logo">Mirror<span>lab</span></div>
+  <nav><a href="#analyze">Analyze</a><a href="#how">How it works</a><a href="#history">History</a></nav>
+</header>
+
+<section class="hero"><div class="orb o1"></div><div class="orb o2"></div>
+  <p class="eyebrow">AI facial harmony analysis</p>
+  <h1>See your face the way<br>an algorithm measures it.</h1>
+  <p class="sub">Upload a selfie. A 478-point face model runs <b>inside your browser</b>, measures 7 proportions, finds your face shape (7 types) and best feature, and gives you an appeal score out of 10 with your PSL rating.</p>
+  <a class="btn" href="#analyze">Start analysis</a>
+  <p class="fine">Photos are never uploaded. Results are saved only in your browser, and you can delete them anytime.</p>
+  <div class="hero-visual">
+    <svg class="mesh" viewBox="0 0 200 250" aria-hidden="true">
+      <path class="ln" d="M100 12C55 12 32 50 32 100c0 55 22 108 68 138 46-30 68-83 68-138 0-50-23-88-68-88z"/>
+      <ellipse class="ln2" cx="100" cy="125" rx="68" ry="113" opacity=".35"/>
+      <path class="ln" d="M52 92q18-12 36 0M112 92q18-12 36 0"/><path class="ln" d="M100 100v46l-9 8h18z"/><path class="ln" d="M80 184q20 12 40 0"/>
+      <path class="ln2" d="M32 100h136M100 12v226M52 92L100 154 148 92M68 184L100 238 132 184"/>
+      <g><circle class="dot" cx="100" cy="12" r="2.6"/><circle class="dot" cx="32" cy="100" r="2.6" style="animation-delay:.3s"/><circle class="dot" cx="168" cy="100" r="2.6" style="animation-delay:.6s"/>
+      <circle class="dot" cx="70" cy="92" r="2.6" style="animation-delay:.9s"/><circle class="dot" cx="130" cy="92" r="2.6" style="animation-delay:1.2s"/><circle class="dot" cx="100" cy="154" r="2.6" style="animation-delay:1.5s"/>
+      <circle class="dot" cx="80" cy="184" r="2.6" style="animation-delay:.2s"/><circle class="dot" cx="120" cy="184" r="2.6" style="animation-delay:.5s"/><circle class="dot" cx="100" cy="238" r="2.6" style="animation-delay:.8s"/>
+      <circle class="dot" cx="48" cy="175" r="2.6" style="animation-delay:1.1s"/><circle class="dot" cx="152" cy="175" r="2.6" style="animation-delay:1.4s"/></g>
+    </svg>
+    <div class="scanline"></div>
+    <span class="chip c1">Symmetry</span><span class="chip c2">Eye <b>tilt</b></span><span class="chip c3">Face <b>shape</b></span><span class="chip c4">Jawline</span>
+  </div>
+  <div class="stats">
+    <div class="stat"><b data-count="478">0</b><span>landmarks tracked</span></div>
+    <div class="stat"><b data-count="7">0</b><span>measurements</span></div>
+    <div class="stat"><b data-count="0">0</b><span>photos uploaded</span></div>
+  </div>
+</section>
+
+<section class="panel reveal" id="features">
+  <h2>What you get</h2>
+  <div class="cards">
+    <div class="card"><span class="ic">🎯</span><b>Appeal score /10</b><p>One clear appeal score, shown together with your PSL 1–8 rating.</p></div>
+    <div class="card"><span class="ic">🧬</span><b>Face shape</b><p>Oval, round, square, oblong, heart, diamond or triangle, with a match %.</p></div>
+    <div class="card"><span class="ic">✨</span><b>Best feature</b><p>The measurement where your face scores highest.</p></div>
+    <div class="card"><span class="ic">📊</span><b>7-point breakdown</b><p>Every proportion explained with an animated bar.</p></div>
+  </div>
+</section>
+
+<section id="analyze" class="panel reveal">
+  <h2>Your analysis</h2>
+  <div class="grid">
+    <div class="stage">
+      <div class="canvas-wrap">
+        <canvas id="canvas" width="640" height="800"></canvas>
+        <video id="video" playsinline muted hidden></video>
+        <div class="scan" id="scan" hidden></div>
+        <div id="placeholder" class="placeholder">Upload a front-facing photo<br><small>neutral expression, even light, no glasses/hat</small></div>
+      </div>
+      <div class="actions">
+        <label class="btn secondary">Upload selfie<input id="file" type="file" accept="image/*" hidden></label>
+        <button id="camBtn" class="btn secondary">Use camera</button>
+        <button id="snapBtn" class="btn secondary" hidden>Capture</button>
+        <button id="analyzeBtn" class="btn" disabled>Analyze</button>
+      </div>
+      <p id="status" class="status" role="status"></p>
+    </div>
+
+    <div id="results" class="results" hidden>
+      <div class="score-card">
+        <div class="ring">
+          <svg viewBox="0 0 120 120"><defs><linearGradient id="rg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8b7bff"/><stop offset="1" stop-color="#35e0c0"/></linearGradient></defs>
+          <circle class="rbg" cx="60" cy="60" r="52"/><circle id="ringFill" class="rfg" cx="60" cy="60" r="52" transform="rotate(-90 60 60)"/></svg>
+          <div class="rnum"><b id="score10">–</b><small>/ 10</small></div>
+        </div>
+        <div><div class="tier" id="tier"></div><div class="pct" id="pct"></div><div class="pct" id="pslLine"></div></div>
+      </div>
+      <div class="info-grid">
+        <div class="info"><small>Face shape</small><b id="shape">–</b><p id="shapeDesc"></p></div>
+        <div class="info"><small>Best feature</small><b id="best">–</b><p id="bestDesc"></p></div>
+      </div>
+      <div id="quality" class="warn" hidden></div>
+      <div id="metrics"></div>
+      <div class="actions">
+        <button id="delBtn" class="btn ghost">Delete this result</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="how" class="panel reveal">
+  <h2>How it works</h2>
+  <div class="cards">
+    <div class="card"><b>1. Landmarks</b><p>Google's MediaPipe Face Landmarker finds 478 points on your face, locally via WebAssembly.</p></div>
+    <div class="card"><b>2. Geometry</b><p>Symmetry, canthal tilt, eye spacing, facial thirds, jaw/cheek ratio, face proportions, mouth/nose ratio.</p></div>
+    <div class="card"><b>3. Your score</b><p>Everything runs in your browser. Your scores are saved only on this device, and you can delete them anytime.</p></div>
+  </div>
+  <div class="disclaimer">
+    <b>Please read:</b> this is an entertainment tool that measures photo geometry, not your worth or real-world attractiveness. The ideals are rough heuristics, not science. Lighting, lens distortion, head angle and expression shift the numbers, and attractiveness depends on far more than proportions (skin, expression, style, personality). If rating apps affect how you feel about yourself, it's fine to skip them.
+  </div>
+</section>
+
+<section id="history" class="panel reveal">
+  <h2>Your history</h2>
+  <div id="historyList" class="history"><p class="fine">No analyses yet.</p></div>
+  <button id="clearBtn" class="btn ghost" hidden>Delete all my data</button>
+</section>
+
+<footer class="reveal">Mirrorlab · built for fun · nothing leaves your device</footer>
+<script>
+/* Shared scoring module: runs in the browser (global `Scoring`) and in Node (require).
+ * Input: 478 MediaPipe face landmarks in PIXEL coordinates -> geometric metrics -> score + PSL.
+ * NOTE: ideals/tolerances are loose, hand-picked heuristics from popular "facial harmony"
+ * literature. They are NOT a validated measure of attractiveness. */
+(function (root, factory) {
+  if (typeof module === "object" && module.exports) module.exports = factory();
+  else root.Scoring = factory();
+})(typeof self !== "undefined" ? self : this, function () {
+  // key, label, ideal value, sigma (tolerance), weight, range accepted by server, blurb
+  const SPEC = [
+    { key: "symmetry", label: "Facial symmetry", unit: "asym.", ideal: 0, sigma: 0.035, weight: 0.24, min: 0, max: 0.5,
+      blurb: "How closely the left and right halves mirror each other. Photo angle affects this a lot." },
+    { key: "canthalTilt", label: "Canthal tilt", unit: "°", ideal: 5, sigma: 4.5, weight: 0.16, min: -30, max: 30,
+      blurb: "Angle of the eyes from inner to outer corner. A slight upward tilt scores best." },
+    { key: "eyeSpacing", label: "Eye spacing", unit: "ratio", ideal: 1.0, sigma: 0.18, weight: 0.14, min: 0.3, max: 2.5,
+      blurb: "Distance between the eyes relative to eye width (the 'one eye apart' rule)." },
+    { key: "thirds", label: "Midface / lower-face balance", unit: "ratio", ideal: 1.0, sigma: 0.16, weight: 0.14, min: 0.3, max: 3,
+      blurb: "Brow-to-nose-base height compared with nose-base-to-chin height." },
+    { key: "jawCheek", label: "Jaw-to-cheekbone ratio", unit: "ratio", ideal: 0.82, sigma: 0.07, weight: 0.12, min: 0.3, max: 1.5,
+      blurb: "Lower jaw width relative to cheekbone width." },
+    { key: "fwhr", label: "Face width-to-height", unit: "ratio", ideal: 1.9, sigma: 0.22, weight: 0.12, min: 0.8, max: 4,
+      blurb: "Cheekbone width divided by brow-to-upper-lip height." },
+    { key: "mouthNose", label: "Mouth-to-nose width", unit: "ratio", ideal: 1.5, sigma: 0.22, weight: 0.08, min: 0.5, max: 4,
+      blurb: "Mouth width relative to nostril width." },
+  ];
+
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const round = (v, d = 2) => Math.round(v * 10 ** d) / 10 ** d;
+
+  function closeness(v, ideal, sigma) {
+    const z = (v - ideal) / sigma;
+    return 100 * Math.exp(-0.5 * z * z);
+  }
+
+  function scoreMetrics(metrics) {
+    let total = 0, wsum = 0;
+    const breakdown = SPEC.map((s) => {
+      const value = metrics[s.key];
+      const score = closeness(value, s.ideal, s.sigma);
+      total += score * s.weight; wsum += s.weight;
+      return { key: s.key, label: s.label, unit: s.unit, blurb: s.blurb, value: round(value, 3), ideal: s.ideal, score: round(score, 1) };
+    });
+    const overall = total / wsum;
+    // Map overall (0-100) onto a PSL-style 1-8 scale where ~4 is typical.
+    const psl = clamp(4 + (overall - 68) / 9, 1, 8);
+    return { overall: round(overall, 1), psl: round(psl, 1), breakdown };
+  }
+
+  function tier(psl) {
+    if (psl < 3) return "Developing";
+    if (psl < 4.5) return "Typical";
+    if (psl < 5.5) return "Above typical";
+    if (psl < 6.5) return "Striking";
+    return "Exceptional";
+  }
+
+  function validateMetrics(m) {
+    if (!m || typeof m !== "object") return false;
+    return SPEC.every((s) => typeof m[s.key] === "number" && Number.isFinite(m[s.key]) && m[s.key] >= s.min && m[s.key] <= s.max);
+  }
+
+  const SHAPES = {
+    Oval: "Balanced proportions: a face about 1.3x longer than wide, with a softly rounded jaw and chin.",
+    Round: "Length and width are close, with full cheeks and a soft, rounded jaw and chin.",
+    Square: "A broad, strong jaw and forehead of similar width, with a flatter chin and fairly straight sides.",
+    Oblong: "A noticeably longer face, with forehead, cheeks and jaw all of similar width.",
+    Heart: "A wider forehead and cheeks that taper to a narrower jaw and a more pointed chin.",
+    Diamond: "Cheekbones are the widest part, with a narrower forehead and a narrower jaw.",
+    Triangle: "A jaw that is wider than the forehead, narrowing upward (also called pear-shaped).",
+  };
+  // Prototype measurements (as a fraction of cheekbone width). These are estimates from general
+  // anthropometry, NOT fitted to a labelled dataset, so treat results as a best guess.
+  const PROTO = {
+    Oval:     { L: 1.32, fW: 0.80, jW: 0.76, cW: 0.48 },
+    Round:    { L: 1.12, fW: 0.84, jW: 0.84, cW: 0.56 },
+    Square:   { L: 1.18, fW: 0.84, jW: 0.90, cW: 0.66 },
+    Oblong:   { L: 1.50, fW: 0.84, jW: 0.82, cW: 0.56 },
+    Heart:    { L: 1.30, fW: 0.88, jW: 0.66, cW: 0.38 },
+    Diamond:  { L: 1.32, fW: 0.70, jW: 0.68, cW: 0.40 },
+    Triangle: { L: 1.22, fW: 0.70, jW: 0.92, cW: 0.66 },
+  };
+  const SD = { L: 0.09, fW: 0.06, jW: 0.07, cW: 0.07 };
+  const WT = { L: 1.3, fW: 1.0, jW: 1.0, cW: 0.9 };
+
+  function classifyShape(f) {
+    const raw = Object.entries(PROTO).map(([name, pr]) => {
+      let d = 0;
+      for (const k of Object.keys(SD)) { const z = (f[k] - pr[k]) / SD[k]; d += WT[k] * z * z; }
+      return { name, score: Math.exp(-0.5 * d) };
+    });
+    const total = raw.reduce((a, r) => a + r.score, 0) || 1;
+    raw.forEach((r) => (r.share = r.score / total));
+    raw.sort((a, b) => b.share - a.share);
+    const top = raw[0], second = raw[1];
+    const confidence = Math.round(top.share * 100);
+    const certainty = confidence >= 55 ? "Strong match" : confidence >= 38 ? "Likely" : "Mixed features";
+    return { name: top.name, desc: SHAPES[top.name], confidence, certainty, runnerUp: second.name,
+      measures: { length: round(f.L, 2), forehead: round(f.fW, 2), jaw: round(f.jW, 2), chin: round(f.cW, 2) } };
+  }
+
+  // Face outline (MediaPipe FACE_OVAL order), image-left and image-right sides, top -> chin.
+  const LEFT = [10, 109, 67, 103, 54, 21, 162, 127, 234, 93, 132, 58, 172, 136, 150, 149, 176, 148, 152];
+  const RIGHT = [10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 365, 379, 378, 400, 377, 152];
+  function xAt(p, side, y) {
+    for (let i = 0; i < side.length - 1; i++) {
+      const a = p[side[i]], b = p[side[i + 1]];
+      if ((a.y <= y && b.y >= y) || (a.y >= y && b.y <= y)) {
+        const t = b.y === a.y ? 0 : (y - a.y) / (b.y - a.y);
+        return a.x + (b.x - a.x) * t;
+      }
+    }
+    return null;
+  }
+  const widthAt = (p, y) => { const l = xAt(p, LEFT, y), r = xAt(p, RIGHT, y); return l == null || r == null ? null : Math.abs(r - l); };
+
+  // Measures the outline's width at 3 heights (forehead, jaw corner, lower jaw) vs. cheekbone width.
+  function faceShape(p, W) {
+    const top = p[10], chin = p[152];
+    const yF = top.y + 0.45 * (p[9].y - top.y);
+    const yM = p[14].y;
+    const yJ = yM + 0.4 * (chin.y - yM);
+    const yC = yM + 0.75 * (chin.y - yM);
+    const wf = widthAt(p, yF), wj = widthAt(p, yJ), wc = widthAt(p, yC);
+    if (wf == null || wj == null || wc == null || !(W > 0)) return null;
+    const f = { L: dist(top, chin) / W, fW: wf / W, jW: wj / W, cW: wc / W };
+    if (!Object.values(f).every(Number.isFinite)) return null;
+    return classifyShape(f);
+  }
+
+  const FEATURE_NAMES = { symmetry: "Facial symmetry", canthalTilt: "Eye shape", eyeSpacing: "Eye spacing",
+    thirds: "Facial balance", jawCheek: "Jawline", fwhr: "Face proportions", mouthNose: "Mouth & nose harmony" };
+  function bestFeature(breakdown) {
+    const b = [...breakdown].sort((x, y) => y.score - x.score)[0];
+    return { key: b.key, name: FEATURE_NAMES[b.key], score: b.score, blurb: b.blurb };
+  }
+  const outOf10 = (psl) => round(clamp((psl / 8) * 10, 0, 10), 1);
+
+  // ---- geometry (client side) ----
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+
+  function computeMetrics(pts) {
+    // Roll-correct: rotate so the line through the inner eye corners is horizontal.
+    const L = pts[133], R = pts[362];
+    const roll = Math.atan2(R.y - L.y, R.x - L.x);
+    const c = { x: (L.x + R.x) / 2, y: (L.y + R.y) / 2 };
+    const cos = Math.cos(-roll), sin = Math.sin(-roll);
+    const p = pts.map((q) => ({ x: c.x + (q.x - c.x) * cos - (q.y - c.y) * sin, y: c.y + (q.x - c.x) * sin + (q.y - c.y) * cos }));
+
+    const faceW = dist(p[234], p[454]);
+    // symmetry about midline through forehead(10) and chin(152)
+    const top = p[10], bot = p[152];
+    const ax = bot.x - top.x, ay = bot.y - top.y, len = Math.hypot(ax, ay);
+    const ux = ax / len, uy = ay / len; // along midline
+    const proj = (q) => { const dx = q.x - top.x, dy = q.y - top.y; return { t: dx * ux + dy * uy, d: -dx * uy + dy * ux }; };
+    const pairs = [[33, 263], [133, 362], [61, 291], [234, 454], [129, 358], [172, 397], [70, 300], [105, 334], [159, 386], [145, 374]];
+    let asym = 0;
+    for (const [l, r] of pairs) {
+      const a = proj(p[l]), b = proj(p[r]);
+      asym += (Math.abs(Math.abs(a.d) - Math.abs(b.d)) + Math.abs(a.t - b.t)) / faceW;
+    }
+    asym /= pairs.length;
+
+    // canthal tilt: outer corner height relative to inner corner (y down => inner.y - outer.y > 0 means upward tilt)
+    const tiltL = Math.atan2(p[133].y - p[33].y, Math.abs(p[33].x - p[133].x));
+    const tiltR = Math.atan2(p[362].y - p[263].y, Math.abs(p[263].x - p[362].x));
+    const canthalTilt = ((tiltL + tiltR) / 2) * 180 / Math.PI;
+
+    const eyeW = (dist(p[33], p[133]) + dist(p[362], p[263])) / 2;
+    const eyeSpacing = dist(p[133], p[362]) / eyeW;
+    const thirds = dist(p[9], p[2]) / dist(p[2], p[152]);
+    const jawCheek = dist(p[172], p[397]) / faceW;
+    const fwhr = faceW / dist(p[168], p[0]);
+    const mouthNose = dist(p[61], p[291]) / dist(p[129], p[358]);
+
+    // face shape (rough heuristic from landmark ratios)
+    const shape = faceShape(p, faceW);
+
+    // pose check: nose tip should sit midway between the cheek edges
+    const dl = dist(p[1], p[234]), dr = dist(p[1], p[454]);
+    const yaw = dl / (dl + dr);
+    return {
+      shape,
+      metrics: {
+        symmetry: round(asym, 4), canthalTilt: round(canthalTilt, 2), eyeSpacing: round(eyeSpacing, 3),
+        thirds: round(thirds, 3), jawCheek: round(jawCheek, 3), fwhr: round(fwhr, 3), mouthNose: round(mouthNose, 3),
+      },
+      quality: { yaw: round(yaw, 3), rollDeg: round(roll * 180 / Math.PI, 1), frontal: Math.abs(yaw - 0.5) < 0.07 },
+    };
+  }
+
+  return { SPEC, scoreMetrics, tier, validateMetrics, computeMetrics, classifyShape, faceShape, bestFeature, outOf10 };
+});
+
+</script>
+<script type="module">
+import { FilesetResolver, FaceLandmarker } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+const $ = (id) => document.getElementById(id);
+const canvas = $("canvas"), ctx = canvas.getContext("2d"), video = $("video"), statusEl = $("status");
+let landmarker = null, hasImage = false, stream = null, currentId = null;
+const setStatus = (t) => (statusEl.textContent = t);
+
+// ---- local "backend": history lives in this browser (localStorage) ----
+const KEY = "mirrorlab-history";
+const load = () => { try { return JSON.parse(localStorage.getItem(KEY)) || []; } catch { return []; } };
+const store = (a) => { try { localStorage.setItem(KEY, JSON.stringify(a.slice(0, 30))); } catch {} };
+function erf(x){const s=Math.sign(x);x=Math.abs(x);const t=1/(1+0.3275911*x);return s*(1-(((((1.061405429*t-1.453152027)*t)+1.421413741)*t-0.284496736)*t+0.254829592)*t*Math.exp(-x*x));}
+const percentile = (psl) => Math.round(0.5 * (1 + erf((psl - 4) / Math.SQRT2)) * 100);
+function build(metrics, id, createdAt, shape) {
+  const r = Scoring.scoreMetrics(metrics);
+  return { id, createdAt, metrics, shape, ...r, tier: Scoring.tier(r.psl), percentile: percentile(r.psl), outOf10: Scoring.outOf10(r.psl), best: Scoring.bestFeature(r.breakdown) };
+}
+
+async function getLandmarker() {
+  if (landmarker) return landmarker;
+  setStatus("Loading face model (first time only, ~10 MB)…");
+  const fileset = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  landmarker = await FaceLandmarker.createFromOptions(fileset, {
+    baseOptions: { modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task" },
+    runningMode: "IMAGE", numFaces: 2 });
+  return landmarker;
+}
+function drawImageCover(src, w, h) {
+  const scale = Math.min(1, 1280 / Math.max(w, h));
+  canvas.width = Math.round(w * scale); canvas.height = Math.round(h * scale);
+  ctx.drawImage(src, 0, 0, canvas.width, canvas.height);
+  hasImage = true; $("placeholder").hidden = true; $("analyzeBtn").disabled = false; $("results").hidden = true;
+}
+$("file").addEventListener("change", async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  if (!f.type.startsWith("image/")) return setStatus("Please choose an image file.");
+  try { const bmp = await createImageBitmap(f, { imageOrientation: "from-image" }); drawImageCover(bmp, bmp.width, bmp.height); setStatus("Photo loaded. Press Analyze."); }
+  catch { setStatus("Couldn't read that image."); }
+});
+$("camBtn").addEventListener("click", async () => {
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 1280, height: 1600 } });
+    video.srcObject = stream; await video.play(); video.hidden = false; $("placeholder").hidden = true;
+    $("snapBtn").hidden = false; setStatus("Look straight at the camera, neutral face, then Capture.");
+  } catch { setStatus("Camera unavailable (needs https). Upload a photo instead."); }
+});
+$("snapBtn").addEventListener("click", () => {
+  const c = document.createElement("canvas"); c.width = video.videoWidth; c.height = video.videoHeight;
+  const g = c.getContext("2d"); g.translate(c.width, 0); g.scale(-1, 1); g.drawImage(video, 0, 0);
+  drawImageCover(c, c.width, c.height);
+  stream.getTracks().forEach((t) => t.stop()); video.hidden = true; $("snapBtn").hidden = true; setStatus("Captured. Press Analyze.");
+});
+$("analyzeBtn").addEventListener("click", async () => {
+  if (!hasImage) return; $("analyzeBtn").disabled = true; $("scan").hidden = false;
+  try {
+    const lm = await getLandmarker(); setStatus("Detecting facial landmarks…");
+    const res = lm.detect(canvas);
+    if (!res.faceLandmarks.length) return setStatus("No face found. Try a clearer, front-facing photo.");
+    if (res.faceLandmarks.length > 1) return setStatus("Multiple faces detected. Use a photo with only you in it.");
+    const W = canvas.width, H = canvas.height;
+    const pts = res.faceLandmarks[0].map((p) => ({ x: p.x * W, y: p.y * H }));
+    drawOverlay(pts);
+    const { metrics, quality, shape } = Scoring.computeMetrics(pts);
+    if (!Scoring.validateMetrics(metrics)) return setStatus("Couldn't measure this photo reliably. Try a straight-on one.");
+    const rec = build(metrics, Math.random().toString(16).slice(2, 14), new Date().toISOString(), shape);
+    await new Promise((r) => setTimeout(r, 900)); // let the scan animation play
+    currentId = rec.id; store([rec, ...load()]);
+    showResult(rec, quality); loadHistory(); setStatus("Done. Your photo never left this device.");
+  } catch (err) { console.error(err); setStatus("Something went wrong: " + err.message); }
+  finally { $("analyzeBtn").disabled = false; $("scan").hidden = true; }
+});
+function drawOverlay(pts) {
+  ctx.save(); ctx.fillStyle = "rgba(53,224,192,.85)"; const r = Math.max(1.2, canvas.width / 500);
+  for (const p of pts) { ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, 7); ctx.fill(); } ctx.restore();
+}
+function countUp(el, to, dec, ms = 1200) {
+  const t0 = performance.now();
+  (function f(t) { const k = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - k, 3); el.textContent = (to * e).toFixed(dec); if (k < 1) requestAnimationFrame(f); })(t0);
+}
+function showResult(d, quality) {
+  const res = $("results"); res.hidden = false; res.classList.remove("pop"); void res.offsetWidth; res.classList.add("pop");
+  countUp($("score10"), d.outOf10, 1);
+  const ring = $("ringFill"); ring.style.strokeDashoffset = 327;
+  requestAnimationFrame(() => requestAnimationFrame(() => (ring.style.strokeDashoffset = 327 * (1 - d.outOf10 / 10))));
+  $("tier").textContent = d.tier + " appeal";
+  $("pct").textContent = `Higher than ~${d.percentile}% on an assumed average`;
+  $("pslLine").textContent = `Appeal ${d.outOf10}/10 = PSL ${d.psl.toFixed(1)}/8 · overall ${d.overall}/100`;
+  $("shape").textContent = d.shape ? d.shape.name : "–";
+  $("shapeDesc").textContent = !d.shape ? "Couldn't be measured for this result."
+    : d.shape.confidence == null ? d.shape.desc
+    : `${d.shape.desc} ${d.shape.certainty} (~${d.shape.confidence}%), closest alternative: ${d.shape.runnerUp}.`;
+  $("best").textContent = d.best ? d.best.name : "–";
+  $("bestDesc").textContent = d.best ? `Scored ${Math.round(d.best.score)}/100, your closest match to the ideal.` : "";
+  const issues = [];
+  if (!quality.frontal) issues.push("Your head looks turned. Face the camera directly for fairer symmetry numbers.");
+  if (Math.abs(quality.rollDeg) > 10) issues.push("Your head is tilted. It was corrected, but a level photo is more reliable.");
+  $("quality").hidden = !issues.length; $("quality").textContent = issues.join(" ");
+  $("metrics").innerHTML = d.breakdown.map((m, i) => `<div class="metric" style="animation-delay:${0.3 + i * 0.09}s"><div class="row"><span>${m.label}${d.best && d.best.key === m.key ? " ⭐" : ""}</span><span>${m.value} ${m.unit} · ideal ≈ ${m.ideal}</span></div><div class="bar"><i style="width:0" data-w="${m.score}"></i></div><p>${m.blurb}</p></div>`).join("");
+  requestAnimationFrame(() => requestAnimationFrame(() => $("metrics").querySelectorAll("i").forEach((el) => (el.style.width = el.dataset.w + "%"))));
+  res.scrollIntoView({ behavior: "smooth", block: "nearest" });
+}
+$("delBtn").addEventListener("click", () => {
+  store(load().filter((a) => a.id !== currentId)); $("results").hidden = true; currentId = null; setStatus("Result deleted."); loadHistory();
+});
+$("clearBtn").addEventListener("click", () => {
+  if (!confirm("Delete all saved results from this browser?")) return;
+  localStorage.removeItem(KEY); $("results").hidden = true; loadHistory(); setStatus("All your data was deleted.");
+});
+function loadHistory() {
+  const items = load(), list = $("historyList"); $("clearBtn").hidden = !items.length;
+  if (!items.length) { list.innerHTML = '<p class="fine">No analyses yet.</p>'; return; }
+  list.innerHTML = items.map((i) => `<div class="item" data-id="${i.id}"><span>${new Date(i.createdAt).toLocaleString()}</span><span>${i.tier}</span><b>${i.psl.toFixed(1)}</b></div>`).join("");
+  list.querySelectorAll(".item").forEach((el) => el.addEventListener("click", () => {
+    const a = load().find((x) => x.id === el.dataset.id); if (!a) return;
+    currentId = a.id; showResult(build(a.metrics, a.id, a.createdAt, a.shape), { frontal: true, rollDeg: 0 });
+  }));
+}
+loadHistory();
+
+// ---- page animations: scroll reveal + counters ----
+const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }), { threshold: 0.12 });
+document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+document.querySelectorAll("[data-count]").forEach((el) => setTimeout(() => countUp(el, +el.dataset.count, 0, 1800), 900));
+
+</script>
+</body>
+</html>
